@@ -37,42 +37,47 @@ def locateIris (path):
     for circle in circles_pupil[0, :]:
         cv2.circle(origin, (circle[0], circle[1]), circle[2], (0, 0, 0), -1)
         cv2.circle(origin, (circle[0], circle[1]), circle[2], (0, 0, 0), 2)
-        cv2.circle(origin, (circle[0], circle[1]), 2, (40, 40, 40), 2)
+        cv2.circle(origin, (circle[0], circle[1]), 2, (0, 0, 0), 2)
         # print int(circle[0])
         # print int(circle[1])
         # print int(circle[2])
+
+        circle[2] = circle[2] + 60.0
+
+        cv2.circle(origin, (circle[0], circle[1]), circle[2], (0, 0, 0), 2)
+
         x1 = int(circle[0] - circle[2] + 2)
         y1 = int(circle[1] - circle[2] + 2)
         x2 = int(circle[0] + circle[2] - 2)
         y2 = int(circle[1] + circle[2] - 2)
 
-    circles_iris = cv2.HoughCircles(edges_iris, cv2.cv.CV_HOUGH_GRADIENT, 2, 400, \
-                                    param1=20, param2=30, minRadius=90, maxRadius=200)
+    #circles_iris = cv2.HoughCircles(edges_iris, cv2.cv.CV_HOUGH_GRADIENT, 2, 400, \
+    #                               param1=20, param2=30, minRadius=90, maxRadius=200)
 
-    x, y, r = circles_iris[0, :][0]
+    x, y, r = circles_pupil[0, :][0]
     rows, cols, channel = origin.shape
     for i in range(cols):
         for j in range(rows):
             if hypot(i - x, j - y) > r:
                 origin[j, i] = 0
-
-    for circle in circles_iris[0, :]:
-        cv2.circle(origin, (circle[0], circle[1]), circle[2], (0, 0, 0), 2)
-        cv2.circle(origin, (circle[0], circle[1]), 2, (40, 40, 40), 2)
-        # print int(circle[0])
-        # print int(circle[1])
-        # print int(circle[2])
-        x1 = int(circle[0] - circle[2]-5)
-        y1 = int(circle[1] - circle[2]-5)
-        x2 = int(circle[0] + circle[2]+5)
-        y2 = int(circle[1] + circle[2]+5)
+    #
+    # for circle in circles_iris[0, :]:
+    #     cv2.circle(origin, (circle[0], circle[1]), circle[2], (0, 0, 0), 2)
+    #     cv2.circle(origin, (circle[0], circle[1]), 2, (40, 40, 40), 2)
+    #     # print int(circle[0])
+    #     # print int(circle[1])
+    #     # print int(circle[2])
+    x1 = int(circle[0] - 100)#circle[2]-5)
+    y1 = int(circle[1] - 100)#circle[2]-5)
+    x2 = int(circle[0] + 100)#circle[2]+5)
+    y2 = int(circle[1] + 100)#circle[2]+5)
 
     crop_origin = cropIris(origin, x1, y1, x2, y2)
 
     ########WHYYYY
 
 
-    return {'im':origin,'rad_iris':circle[2],"x":circle[0],"y":circle[1]}
+    return {'im':crop_origin,'rad_iris':circle[2],"x":circle[0],"y":circle[1]}
 
 def irisProcessing(image, kernel) :
     processedIris = image
@@ -87,14 +92,15 @@ def irisProcessing(image, kernel) :
 
 def findPatern(image) :
     keys = image
-    corners = cv2.goodFeaturesToTrack(keys, 25, 0.01, 10)
-    corners = np.int0(corners)
+    fast = cv2.FastFeatureDetector()
+    kp = fast.detect(keys, None)
+    img2 = cv2.drawKeypoints(keys, kp, color=(255, 0, 0))
+    fast.setBool('nonmaxSuppression', 0)
+    kp = fast.detect(keys, None)
 
-    for i in corners:
-        x, y = i.ravel()
-        cv2.circle(keys, (x, y), 3, 200, -1)
+    img3 = cv2.drawKeypoints(keys, kp, color=(255, 0, 0))
 
-    return keys
+    return img2
 
 def normalize(image, rad):
     imgSize = cv2.cv.GetSize(image)
