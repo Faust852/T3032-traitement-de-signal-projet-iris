@@ -1,71 +1,62 @@
-# import the necessary packages
 import numpy as np
 import cv2
+import cv
 import Image
+import utils
+from matplotlib import pyplot as plt
+from math import hypot
 from itertools import izip
+from scipy import ndimage
+from sklearn.preprocessing import normalize
 
-def locateIris (image, kernel):
-    #converti en rgb -> gray
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    #floutte
-    cl1 = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    clahe = cl1.apply(gray)
-    #floutte encore plus
-    medianblur = cv2.medianBlur(clahe, 19)
-    #blur = cv2.medianBlur(medianblur, 19)
-    erosion = cv2.morphologyEx(medianblur, cv2.MORPH_OPEN, kernel)
-    #trouve les edges entre les variations de couleurs
-    edges = cv2.Canny(erosion, 30, 60)
-    #trouve l'iris (les cercles)
-    circles = cv2.HoughCircles(edges, cv2.cv.CV_HOUGH_GRADIENT, 1, 3000,
-                               param1=30, param2=15, minRadius=30, maxRadius=150)
-    #dessine un cercle autour de ceux trouvés
-    for circle in circles[0, :]:
-        cv2.circle(image, (circle[0], circle[1]), circle[2], (255, 255, 255), 1)
-        cv2.circle(image, (circle[0], circle[1]), 2, (255, 255, 255), 2)
-        # print int(circle[0])
-        # print int(circle[1])
-        # print int(circle[2])
-        x1 = int(circle[0] - 100)#circle[2])
-        y1 = int(circle[1] - 100)#circle[2])
-        x2 = int(circle[0] + 100)#circle[2])
-        y2 = int(circle[1] + 100)#circle[2])
+kernel = np.ones((2,2),np.uint8)
 
-    return {'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
+path = './images/NIR_2/001_2_2.bmp'
+path2 = './images/NIR_2/003_2_4.bmp'
 
-#decoupe l'image autour du cercle
-def cropIris (image, x1, y1, x2, y2):
-    crop = image[y1:y2, x1:x2]
-    if crop is not None:
-        return crop
-    return None
+img = utils.locateIris(path)
+img2 = utils.locateIris(path2)
 
-#compare les images
-def compareImages(i1, i2) :
-    assert i1.mode == i2.mode, "Different kinds of images."
-    assert i1.size == i2.size, "Different sizes."
+cv2.imshow("img", img['im'])
+cv2.imshow("img2", img2['im'])
 
-    pairs = izip(i1.getdata(), i2.getdata())
-    if len(i1.getbands()) == 1:
-        # for gray-scale jpegs
-        dif = sum(abs(p1 - p2) for p1, p2 in pairs)
-    else:
-        dif = sum(abs(c1 - c2) for p1, p2 in pairs for c1, c2 in zip(p1, p2))
+processed_img = utils.irisProcessing(img['im'], kernel)
+processed_img2 = utils.irisProcessing(img2['im'], kernel)
 
-    ncomponents = i1.size[0] * i1.size[1] * 3
-    res = (dif / 255.0 * 100) / ncomponents
-    if res != 0 :
-        return res
-    else :
-        return 1000
+test = utils.normalize(cv.fromarray(img['im']),int(img['rad_iris']))
+cv2.imshow("test", np.asarray(test[:,:] ))
 
+test2 = utils.normalize(cv.fromarray(img2['im']),int(img2['rad_iris']))
+cv2.imshow("test2", np.asarray(test2[:,:] ))
 
-def mse (imageA, imageB):
+pattern = utils.findPatern(processed_img)
+pattern2 = utils.findPatern(processed_img2)
 
-    err = np.sum((imageA.astype("float") - imageB.astype("float")) ** 2)
-    err /= float(imageA.shape[0] * imageA.shape[1])
+cv2.waitKey(0)
 
-    if err != 0 :
-        return err
-    else :
-        return 100000
+image_threshold = .5
+
+s = ndimage.generate_binary_structure(2,2)
+
+labeled_array, num_features = ndimage.label(processed_img, structure=s)
+print(num_features)
+
+sizes = ndimage.sum(processed_img2,labeled_array,range(1,num_features+1))
+map = np.where(sizes==sizes.max())[0] + 1
+mip = np.where(sizes==sizes.min())[0] + 1
+
+max_index = np.zeros(num_features + 1, np.uint8)
+max_index[map] = 1
+max_feature = max_index[labeled_array]
+
+min_index = np.zeros(num_features + 1, np.uint8)
+min_index[mip] = 1
+min_feature = min_index[labeled_array]
+
+plt.subplot(121)
+plt.imshow(pattern)
+plt.subplot(122)
+plt.imshow(pattern2)
+plt.show()
+
+cv2.waitKey(0)
