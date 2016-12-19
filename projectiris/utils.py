@@ -14,24 +14,20 @@ from scipy import ndimage
 kernel = np.ones((5,5),np.uint8)
 
 def wrapperIris (path):
-    im1 = cv2.imread(path)
-    cv2.imshow('origin1', im1)
-
 
     im1 = locateIris(path)
     im1_smg = irisProcessing(im1['im'], kernel)
-    cv2.imshow('segm1', im1_smg)
-
-
     im1_norm = normalize(im1_smg, im1['rad_iris'])
-    cv2.imshow('norm1', im1_norm)
-
-
     _,im1_bina = cv2.threshold(im1_norm, 170, 255, cv2.THRESH_BINARY)
-    cv2.imshow('bin1', im1_bina)
 
+    ### TO HIDE FOR finder.py
+    cv2.imshow('origin1', im1['im'])
+    cv2.imshow('segm1', im1_smg)
+    cv2.imshow('norm1', im1_norm)
+    cv2.imshow('bin1', im1_bina)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
     return im1, im1_smg, im1_norm, im1_bina
 
 ##
@@ -145,20 +141,20 @@ def findPattern(image) :
 #TEMP FONCTION
 #
 ##
-def comparePattern (image1, image2) :
-    orb = cv2.ORB_create()
+def comparePattern (image1, image2):
+    orb = cv2.ORB_create(scaleFactor=1.02, patchSize=30)
     kp1, des1 = orb.detectAndCompute(image1, None)
     kp2, des2 = orb.detectAndCompute(image2, None)
     # create BFMatcher object
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING2, crossCheck=True)
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     # Match descriptors.
     matches = bf.match(des1, des2)
     # Sort them in the order of their distance.
     matches = sorted(matches, key=lambda x: x.distance)
     # Draw first 10 matches.
-    print len(matches)
-    img3 = cv2.drawMatches(image1, kp1, image2, kp2, matches[:1000],None, flags=2)
-    plt.imshow(img3), plt.show()
+    # print len(matches)
+    img3 = cv2.drawMatches(image1, kp1, image2, kp2, matches[:10],None, flags=2)
+    plt.imshow(img3), plt.show() #########to hide for finder
     return len(matches)
 
 def binaryComparison(img1, img2):
@@ -230,10 +226,11 @@ def drawContour(image, kernel):
 # Return a normalized image of the iris (a rectangle) Much easier to compare and match
 ##
 def normalize(image, rad):
-    tmp = np.zeros((3*rad, image.shape[0], 3),np.uint8)
+    # tmp = np.zeros((3*rad, image.shape[0], 3),np.uint8)
 
     c = (float(image.shape[0] / 2.0), float(image.shape[1] / 2.0))
-    image = cv2.logPolar(image,(image.shape[0] / 2, image.shape[1] / 2), 42, cv2.WARP_FILL_OUTLIERS)
+    image = cv2.linearPolar(image, (image.shape[0] / 2, image.shape[1] / 2), 100, cv2.WARP_FILL_OUTLIERS)
+    # image = cv2.logPolar(image,(image.shape[0] / 2, image.shape[1] / 2), 42, cv2.WARP_FILL_OUTLIERS)
     #imgRes = logpolar_naive(image, float(imgSize[0]/2.0), float(imgSize[1]/2.0))
     #imgRes = ndimage.rotate(imgRes, 90)
     # mask = cv2.imread('mask.jpg')
