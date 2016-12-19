@@ -181,7 +181,7 @@ def normalize(image, rad):
     tmp = np.zeros((3*rad, image.shape[0], 3),np.uint8)
 
     c = (float(image.shape[0] / 2.0), float(image.shape[1] / 2.0))
-    image = cv2.logPolar(image,(image.shape[0] / 2, image.shape[1] / 2), 50, cv2.WARP_FILL_OUTLIERS)
+    image = cv2.logPolar(image,(image.shape[0] / 2, image.shape[1] / 2), 42, cv2.WARP_FILL_OUTLIERS)
     #imgRes = logpolar_naive(image, float(imgSize[0]/2.0), float(imgSize[1]/2.0))
     #imgRes = ndimage.rotate(imgRes, 90)
     # mask = cv2.imread('mask.jpg')
