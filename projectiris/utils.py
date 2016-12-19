@@ -9,6 +9,32 @@ from matplotlib import pyplot as plt
 from math import hypot
 from math import ceil, exp, pi
 from math import log, cos, sin
+from scipy import ndimage
+
+kernel = np.ones((5,5),np.uint8)
+
+def wrapperIris (path):
+    im1 = cv2.imread(path)
+    cv2.imshow('origin1', im1)
+
+    cv2.waitKey(0)
+
+    im1 = locateIris(path)
+    im1_smg = irisProcessing(im1['im'], kernel)
+    cv2.imshow('segm1', im1_smg)
+
+    cv2.waitKey(0)
+
+    im1_norm = normalize(im1_smg, im1['rad_iris'])
+    cv2.imshow('norm1', im1_norm)
+
+    cv2.waitKey(0)
+
+    _,im1_bina = cv2.threshold(im1_norm, 170, 255, cv2.THRESH_BINARY)
+    cv2.imshow('bin1', im1_bina)
+
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 ##
 #input : the path of an image (string)
@@ -39,11 +65,11 @@ def locateIris (path):
     edges_pupil = cv2.Canny(edges_pupil, 30, 60)
     edges_pupil = cv2.GaussianBlur(edges_pupil, (15, 15), 0)
 
-    edges_iris = cl1.apply(clean_iris)
-    edges_iris = cv2.GaussianBlur(edges_iris, (15, 15), 0)
-    edges_iris = cv2.GaussianBlur(edges_iris, (15, 15), 0)
-    edges_iris = cv2.Canny(edges_iris, 30, 60)
-    edges_iris = cv2.GaussianBlur(edges_iris, (15, 15), 0)
+    # edges_iris = cl1.apply(clean_iris)
+    # edges_iris = cv2.GaussianBlur(edges_iris, (15, 15), 0)
+    # edges_iris = cv2.GaussianBlur(edges_iris, (15, 15), 0)
+    # edges_iris = cv2.Canny(edges_iris, 30, 60)
+    # edges_iris = cv2.GaussianBlur(edges_iris, (15, 15), 0)
 
     #HoughCircles is a function that is looking for circle shape in the image
     #We use a small radius because we only need to isolate the pupil
@@ -111,11 +137,11 @@ def irisProcessing(image, kernel) :
 # The function is used to locate pattern on a picture
 ##
 def findPattern(image) :
-    keys = image
-    fast = cv2.FastFeatureDetector_create()
-    kp = fast.detect(keys, None)
-    img2 = cv2.drawKeypoints(keys, kp, color=(255, 0, 0))
-    return img2
+    orb = cv2.ORB_create()
+    kp = orb.detect(image, None)
+    kp, des = orb.compute(image, kp)
+    image = cv2.drawKeypoints(image, kp,image, color=(0, 255, 0), flags=0)
+    return image
 
 ##
 #TEMP FONCTION
@@ -126,7 +152,7 @@ def comparePattern (image1, image2) :
     kp1, des1 = orb.detectAndCompute(image1, None)
     kp2, des2 = orb.detectAndCompute(image2, None)
     # create BFMatcher object
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING2, crossCheck=True)
     # Match descriptors.
     matches = bf.match(des1, des2)
     # Sort them in the order of their distance.
@@ -136,29 +162,32 @@ def comparePattern (image1, image2) :
     img3 = cv2.drawMatches(image1, kp1, image2, kp2, matches[:1000],None, flags=2)
     plt.imshow(img3), plt.show()
 
-
-##
+#
 # input : nparray & kernel (see irisProcessing
 # output : nparray
 # contour the image, easier to extract
 ##
 def drawContour(image, kernel):
-    im_gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-    ret,thresh = cv2.threshold(im_gray,1,255,0)
-    opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
-    contours, hierarchy = cv2.findContours(opening,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-    cv2.drawContours(image, contours, -1, (0,255,0), 1)
+    ret, image = cv2.threshold(image, 15, 255, cv2.THRESH_BINARY)
+    image = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
+    image = cv2.erode(image, kernel, iterations=1)
     return image
-
 ##
 # input : nparray and int
 # output : nparray
 # Return a normalized image of the iris (a rectangle) Much easier to compare and match
 ##
 def normalize(image, rad):
-    imgSize = image.shape
-    imgRes = logpolar_naive(image, float(imgSize[0]/2.0), float(imgSize[1]/2.0))
-    return (imgRes)
+    tmp = np.zeros((3*rad, image.shape[0], 3),np.uint8)
+
+    c = (float(image.shape[0] / 2.0), float(image.shape[1] / 2.0))
+    image = cv2.logPolar(image,(image.shape[0] / 2, image.shape[1] / 2), 50, cv2.WARP_FILL_OUTLIERS)
+    #imgRes = logpolar_naive(image, float(imgSize[0]/2.0), float(imgSize[1]/2.0))
+    #imgRes = ndimage.rotate(imgRes, 90)
+    # mask = cv2.imread('mask.jpg')
+    # mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+    # imgRes = cv2.bitwise_and(imgRes, imgRes, mask=mask)
+    return (image)
 
 ##
 #input : nparray, int, int, int, int
@@ -194,7 +223,6 @@ def compareImages(i1, i2) :
     else :
         return 1000
 
-
 ##
 # TO USE IF THE REST FAIL :(:(:(:(:(
 #
@@ -210,29 +238,21 @@ def mse (imageA, imageB):
     else :
         return 100000
 
-
 def logpolar_naive (image, i_0, j_0, p_n=None, t_n=None):
-    r'''"Naive" implementation of the log-polar transform in Python.
-
+    '''"Naive" implementation of the log-polar transform in Python.
         Arguments:
-
         image
             The input image.
-
         i_0, j0
             The center of the transform.
-
         p_n, t_n
             Optional. Dimensions of the output transform. If any are None,
             suitable defaults are used.
-
         Returns:
-
         The log-polar transform for the input image.
     '''
     # Shape of the input image.
     (i_n, j_n) = image.shape[:2]
-
     # The distance d_c from the transform's focus (i_0, j_0) to the image's
     # farthest corner (i_c, j_c). This is used below as the default value for
     # p_n, and also to calculate the iteration step across the transform's p
@@ -240,22 +260,17 @@ def logpolar_naive (image, i_0, j_0, p_n=None, t_n=None):
     i_c = max(i_0, i_n - i_0)
     j_c = max(j_0, j_n - j_0)
     d_c = (i_c ** 2 + j_c ** 2) ** 0.5
-
     if p_n == None:
         # The default value to p_n is defined as the distance d_c.
         p_n = int(ceil(d_c))
-
     if t_n == None:
         # The default value to t_n is defined as the width of the image.
         t_n = j_n
-
     # The scale factors determine the size of each "step" along the transform.
     p_s = log(d_c) / p_n
     t_s = 2.0 * pi / t_n
-
     # The transform's pixels have the same type and depth as the input's.
     transformed = np.zeros((p_n, t_n) + image.shape[2:], dtype=image.dtype)
-
     # Scans the transform across its coordinate axes. At each step calculates
     # the reverse transform back into the cartesian coordinate system, and if
     # the coordinates fall within the boundaries of the input image, takes that
