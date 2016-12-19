@@ -17,24 +17,22 @@ def wrapperIris (path):
     im1 = cv2.imread(path)
     cv2.imshow('origin1', im1)
 
-    cv2.waitKey(0)
 
     im1 = locateIris(path)
     im1_smg = irisProcessing(im1['im'], kernel)
     cv2.imshow('segm1', im1_smg)
 
-    cv2.waitKey(0)
 
     im1_norm = normalize(im1_smg, im1['rad_iris'])
     cv2.imshow('norm1', im1_norm)
 
-    cv2.waitKey(0)
 
     _,im1_bina = cv2.threshold(im1_norm, 170, 255, cv2.THRESH_BINARY)
     cv2.imshow('bin1', im1_bina)
 
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+    return im1, im1_smg, im1_norm, im1_bina
 
 ##
 #input : the path of an image (string)
@@ -125,7 +123,7 @@ def locateIris (path):
 def irisProcessing(image, kernel) :
     processedIris = image
     processedIris = cv2.cvtColor(processedIris, cv2.COLOR_BGR2GRAY)
-    cl1 = cv2.createCLAHE(clipLimit=10.0, tileGridSize=(8, 8))
+    cl1 = cv2.createCLAHE(clipLimit=22.0, tileGridSize=(8, 8))
     clahe = cl1.apply(processedIris)
     #ret, thresh1 = cv2.threshold(clahe, 170, 255, cv2.THRESH_BINARY)
     #opening = cv2.morphologyEx(clahe, cv2.MORPH_OPEN, kernel)
@@ -161,8 +159,62 @@ def comparePattern (image1, image2) :
     print len(matches)
     img3 = cv2.drawMatches(image1, kp1, image2, kp2, matches[:1000],None, flags=2)
     plt.imshow(img3), plt.show()
+    return len(matches)
 
-#
+def binaryComparison(img1, img2):
+    labelarray1, precount1 = ndimage.measurements.label(img1)
+    labelarray2, precount2 = ndimage.measurements.label(img2)
+    if precount1 > precount2:
+        numberOfPixels = precount1
+    else:
+        numberOfPixels = precount2
+    results = cv2.bitwise_and(img1, img2, None, None)
+    cv2.imshow('result', results)
+    labelarray, particle_count = ndimage.measurements.label(results)
+    final = particle_count
+    percentage = ((float(final)) / numberOfPixels)*100
+    return percentage
+
+def comparePatternSift (image1, image2) :
+    sift = cv2.xfeatures2d.SIFT_create()
+    kp1, des1 = sift.detectAndCompute(image1, None)
+    kp2, des2 = sift.detectAndCompute(image2, None)
+
+    FLANN_INDEX_KDTREE = 0
+    index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+    search_params = dict(checks=50)
+
+    flann = cv2.FlannBasedMatcher(index_params, search_params)
+    matches = flann.knnMatch(des1, des2, k=2)
+    # store all the good matches as per Lowe's ratio test.
+    good = []
+    for m, n in matches:
+        if m.distance < 0.7 * n.distance:
+            good.append(m)
+
+    if len(good)>10:
+        src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+        dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+        matchesMask = mask.ravel().tolist()
+        h, w, d = image1.shape
+        pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+        dst = cv2.perspectiveTransform(pts, M)
+        image2 = cv2.polylines(image2, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+
+    else:
+        print "Not enough matches are found - %d/%d" % (len(good), 10)
+        matchesMask = None
+
+    draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
+    singlePointColor = None,
+    matchesMask = matchesMask,  # draw only inliers
+    flags = 2)
+    img3 = cv2.drawMatches(image1, kp1, image2, kp2, good, None, **draw_params)
+    plt.imshow(img3, 'gray'), plt.show()
+
+
+
 # input : nparray & kernel (see irisProcessing
 # output : nparray
 # contour the image, easier to extract
