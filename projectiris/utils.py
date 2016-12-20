@@ -1,4 +1,4 @@
-#From Micciche David - 2016
+#From Micciche David, Adrien Culem, François Marchal - 2016
 #For EPHEC - Signal Processing Assignement
 
 import numpy as np
